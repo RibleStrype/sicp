@@ -50,13 +50,11 @@
     (product identity 1 inc n))
 
 (define (approx-pi n)
-    (define (term i)
-        (* (/ i (- i 1)) (/ i (+ i 1))))
-
-    (define (inc2 x)
-        (+ x 2))
-
-    (* (/ 8.0 3) (product term 4 inc2 n)))
+    (* (/ 8.0 3)
+       (product (lambda (i) (* (/ i (- i 1)) (/ i (+ i 1)))) 
+                4 
+                (lambda (x) (+ x 2)) 
+                n)))
 
 (define (sum-square-prime a b)
     (filtered-accum prime? + 0 square a inc b))
@@ -67,7 +65,25 @@
         (gcd b (remainder a b))))
 
 (define (prod-relative-prime n)
-    (define (relative-prime? i)
-        (= (gcd i n) 1))
+    (filtered-accum (lambda (i) (= (gcd i n) 1)) * 1 identity 1 inc n))
 
-    (filtered-accum relative-prime? * 1 identity 1 inc n))
+
+(define (f g) (g 2))
+
+(define (fixed-point f first-guess)
+    (define (close-enough? guess)
+        (< (abs (- guess first-guess)) 0.0001))
+    (let ((next (f first-guess)))
+        (display next)
+        (newline)
+        (if (close-enough? next)
+            next
+            (fixed-point f next))))
+
+(define golden-ratio (fixed-point (lambda (x) (+ 1 (/ 1 x))) 1.0))
+
+(define (average x y) (/ (+ x y) 2))
+
+(fixed-point (lambda (x) (/ (log 1000) (log x))) 2.0)
+
+(fixed-point (lambda (x) (average x (/ (log 1000) (log x)))) 2.0)
