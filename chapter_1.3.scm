@@ -87,3 +87,43 @@
 (fixed-point (lambda (x) (/ (log 1000) (log x))) 2.0)
 
 (fixed-point (lambda (x) (average x (/ (log 1000) (log x)))) 2.0)
+
+(define (cont-frac-recur n d k)
+    (define (loop i)
+        (if (> i k)
+            0
+            (/ (n i)
+               (+ (d i)
+                  (loop (+ i 1))))))
+    (loop 1))
+
+(define (cont-frac-iter n d k)
+    (define (loop i accum)
+        (if (<= i 0)
+            accum
+            (loop (- i 1)
+                  (/ (n i)
+                     (+ (d i)
+                        accum)))))
+    (loop k 0))
+
+(cont-frac-iter (lambda (i) 1.0)
+                 (lambda (i) 1.0)
+                 12)
+
+(define (approx-e k)
+    (+ 2
+       (cont-frac-iter (lambda (i) 1)
+                       (lambda (i)
+                           (if (= 2 (remainder i 3))
+                               (+ 2 (* 2 (quotient i 3)))
+                               1.0))
+                        k)))
+
+(define (tan-cf x k)
+    (cont-frac-iter (lambda (i)
+                        (if (= i 1)
+                            x
+                            (- (square x))))
+                    (lambda (i) (- (* i 2) 1))
+                    k))
