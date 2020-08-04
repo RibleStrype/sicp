@@ -80,8 +80,6 @@
             next
             (fixed-point f next))))
 
-(define golden-ratio (fixed-point (lambda (x) (+ 1 (/ 1 x))) 1.0))
-
 (define (average x y) (/ (+ x y) 2))
 
 (fixed-point (lambda (x) (/ (log 1000) (log x))) 2.0)
@@ -127,3 +125,65 @@
                             (- (square x))))
                     (lambda (i) (- (* i 2) 1))
                     k))
+
+(define dx 0.00001)
+
+(define (deriv f)
+    (lambda (x) (/ (- (f (+ x dx)) (f x)) dx)))
+
+(define (cube x) (* x x x))
+(define cube-deriv (deriv cube))
+
+(define (newton-transform f)
+    (let ((df (deriv f)))
+        (lambda (x) (- x
+                       (/ (f x)
+                          (df x))))))
+
+(define (newtons-method g gues)
+    (fixed-point (newton-transform g)
+                 gues))
+
+(define (sqrt x)
+  (newtons-method 
+   (lambda (y) 
+     (- (square y) x)) 
+   1.0))
+
+(define (double f)
+    (lambda (x)
+        (f (f x))))
+
+(define (compose f g)
+    (lambda (x) (f (g x))))
+
+(define (repeated f n)
+    (if (<= n 1)
+        f
+        (compose f (repeated f (- n 1)))))
+
+(define (avg-three x y z)
+    (/ (+ x y z) 3))
+
+(define (smooth f)
+    (lambda (x)
+        (avg-three (f (- x dx))
+                   (f x)
+                   (f (+ x dx)))))
+
+(((repeated smooth 10) cube) 2)
+
+(define (iterative-improve good-enough? improve)
+    (define (loop guess)
+        (let ((next (improve guess)))
+             (if (good-enough? guess next)
+                 next
+                 (loop next))))
+    loop)
+
+(define (fixed-point2 f first-guess)
+    ((iterative-improve (lambda (guess next) (< (abs (- guess next)) 0.0001))
+                        f)
+     first-guess))
+
+;(define golden-ratio (fixed-point2 (lambda (x) (+ 1 (/ 1 x))) 1.0))
