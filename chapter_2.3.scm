@@ -54,6 +54,11 @@
 (define (sum? exp) (eq? '+ (car exp)))
 (define addend cadr)
 (define augend caddr)
+(define (augend expr)
+  (fold-left
+    make-sum
+    0
+    (cddr expr)))
 
 (define (make-product x y)
     (cond ((=number? x 0) 0)
@@ -66,7 +71,11 @@
           (else (list '* x y))))
 (define (product? exp) (eq? '* (car exp)))
 (define multiplier cadr)
-(define multiplicand caddr)
+(define (multiplicand expr)
+  (fold-left
+    make-product
+    1
+    (cddr expr)))
 
 (define (make-exponentiation base power)
   (cond ((=number? power 0) 1)
