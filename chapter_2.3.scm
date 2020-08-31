@@ -108,3 +108,19 @@
 
 (define (union-set set1 set2)
   (fold-right adjoin-set set1 set2))
+
+(define (adjoin-ordered-set x set)
+  (cond ((null? set) (list x))
+        ((= x (car set)) set)
+        ((< x (car set)) (cons x set))
+        ((> x (car set)) (cons (car set) (adjoin-ordered-set x (cdr set))))))
+
+(define (union-ordered-set set1 set2)
+  (cond ((null? set1) set2)
+        ((null? set2) set1)
+        ((= (car set1) (car set2))
+          (cons (car set1) (union-ordered-set (cdr set1) (cdr set2))))
+        ((< (car set1) (car set2)) 
+          (cons (car set1) (union-ordered-set (cdr set1) set2)))
+        (else
+          (cons (car set2) (union-ordered-set set1 (cdr set2))))))
