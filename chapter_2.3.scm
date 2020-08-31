@@ -124,3 +124,81 @@
           (cons (car set1) (union-ordered-set (cdr set1) set2)))
         (else
           (cons (car set2) (union-ordered-set set1 (cdr set2))))))
+
+
+(define (entry tree) (car tree))
+(define (left-branch tree) (cadr tree))
+(define (right-branch tree) (caddr tree))
+(define (make-tree entry left right)
+  (list entry left right))
+
+(define (tree->list tree)
+  (if (null? tree)
+      '()
+      (append 
+       (tree->list
+        (left-branch tree))
+       (cons (entry tree)
+             (tree->list
+              (right-branch tree))))))
+
+(define (list->tree elements)
+
+  (define (partial-tree elts n)
+    (if (= n 0)
+      (cons '() elts)
+      (let ((left-size 
+             (quotient (- n 1) 2)))
+        (let ((left-result 
+               (partial-tree 
+                elts left-size)))
+          (let ((left-tree 
+                 (car left-result))
+                (non-left-elts 
+                 (cdr left-result))
+                (right-size 
+                 (- n (+ left-size 1))))
+            (let ((this-entry 
+                   (car non-left-elts))
+                  (right-result 
+                   (partial-tree 
+                    (cdr non-left-elts)
+                    right-size)))
+              (let ((right-tree 
+                     (car right-result))
+                    (remaining-elts 
+                     (cdr right-result)))
+                (cons (make-tree this-entry 
+                                 left-tree 
+                                 right-tree)
+                      remaining-elts))))))))
+
+  (car (partial-tree elements (length elements))))
+
+(define
+  tree
+  (make-tree 7
+             (make-tree 3
+                        (make-tree 1 () ())
+                        (make-tree 5 () ()))
+             (make-tree 9
+                        ()
+                        (make-tree 11 () ()))))
+
+(define (union-tree-set set1 set2)
+  (list->tree 
+    (union-ordered-set
+      (tree->list set1)
+      (tree->list set2))))
+
+(union-tree-set
+  tree
+  (list->tree (list 2 4 5 6)))
+
+
+(define (key x) x)
+(define (lookup given-key set-of-records)
+  (cond ((null? set-of-records) #f)
+        ((= given-key (key (entry set-of-records))) (entry set-of-records))
+        ((< given-key (key (entry set-of-records))) (lookup given-key (left-branch set-of-records)))
+        (else (lookup given-key (right-branch set-of-records)))))
