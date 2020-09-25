@@ -18,11 +18,34 @@
             (caddr res)
             res)))
 
-(define (put-coercion from to coercion table)
-    (put 'coerce (list from to) coercion table))
+(define type-hierarchy '(scheme-number rational complex))
 
-(define (get-coercion from to)
-    (get 'coerce (list from to)))
+(define (super-type type)
+    (let ((super-types 
+            (cdr (drop-while (lambda (t) (not (eq? t type))) type-hierarchy))))
+        (if (null? super-types)
+            #f
+            (car super-types))))
+
+; is x sub-type of y?
+(define (sub-type? x y)
+    (let ((super-types 
+            (drop-while 
+                (lambda (t)
+                    (not (eq? t x))) 
+                type-hierarchy)))
+        (if (find (lambda (t) (eq? t y)) (cdr super-types))
+            #t
+            #f)))
+
+(define (put-raise from-type raise table)
+    (let ((to-type (super-type from-type)))
+        (if to-type
+            (put 'raise (list from-type to-type) raise table)
+            table)))
+
+(define (get-raise from)
+    (get 'raise (list from (super-type from))))
 
 (define (attach-tag tag x)
     (if (number? x)
@@ -40,27 +63,40 @@
         (cadr x)))
 
 (define (apply-generic op . args)
-    (let* ((type-tags (map type-tag args))
-           (proc (get op type-tags)))
-          (if proc
-              (apply proc (map contents args))
-              (if (= (length args) 2)
-                  (let* ((t1 (car type-tags))
-                        (t2 (cadr type-tags))
-                        (a1 (car args))
-                        (a2 (cadr args))
-                        (t1->t2 (get-coercion t1 t2))
-                        (t2->t1 (get-coercion t2 t1)))
-                    (cond (t1->t2 
-                            (apply-generic op (t1->t2 a1) a2))
-                          (t2->t1
-                            (apply-generic op a1 (t2->t1 a2)))
-                          (else (error
-                                    "No method for these types"
-                                    (list op type-tags)))))
-                  (error 
-                    "No method for these types"
-                    (list op type-tags))))))
+    (define (coerce to-type)
+        (lambda (arg)
+            (let ((from-type (type-tag arg)))
+                (if (sub-type? from-type to-type)
+                    (let ((raise (get-raise from-type)))
+                        (if raise
+                            ((coerce to-type) (raise (contents arg)))
+                            arg))
+                    arg))))
+
+    (define (get-proc args)
+        (let ((type-tags (map type-tag args)))
+            (get op type-tags)))
+
+    (define (coerced-proc to-type)
+        (let* ((coerced-args (map (coerce to-type) args))
+              (proc (get-proc coerced-args)))
+             (if proc
+                 (lambda () (apply proc (map contents coerced-args))) 
+                 #f)))
+
+    (let ((proc (get-proc args)))
+        (if proc
+            (apply proc (map contents args)) 
+            (let ((proc2 (fold-left 
+                            (lambda (res type)
+                                (or res (coerced-proc type))) 
+                            #f 
+                            (map type-tag args))))
+                (if proc2
+                    (proc2)
+                    (error
+                        "No method for theses types"
+                        (list op (map type-tag args))))))))
 
 (define (install-scheme-number-package table)
   (define (tag x)
@@ -79,13 +115,11 @@
                                 =
                                 (put 'zero? '(scheme-number)
                                      (lambda (x) (= x 0))
-                                     (put-coercion 'scheme-number 'rational
-                                                   (lambda (x) (make-rational x 1))
-                                                   (put 'exp '(scheme-number scheme-number)
-                                                        (lambda (x y) (tag (expt x y))) 
-                                                        (put-coercion 'scheme-number 'complex
-                                                                      (lambda (x) (make-complex-from-real-imag x 0))
-                                                                      table)))))))))))
+                                     (put 'exp '(scheme-number scheme-number)
+                                          (lambda (x y) (tag (expt x y))) 
+                                          (put-raise 'scheme-number
+                                                     (lambda (x) (make-rational x 1)) 
+                                                     table))))))))))
 
 (define (install-rational-package table)
     (define numer car)
@@ -137,7 +171,12 @@
                                                 eq-rat
                                                 (put 'zero? '(rational)
                                                      zero?
-                                                     table))))))))
+                                                     (put-raise 'rational
+                                                          (lambda (x) 
+                                                            (make-complex-from-real-imag 
+                                                                (/ (numer x) (denom x)) 
+                                                                0)) 
+                                                          table)))))))))
 
 (define (install-rectangular-package table)
     (define (make-from-real-imag x y)
