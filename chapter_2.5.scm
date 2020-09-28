@@ -27,6 +27,12 @@
             #f
             (car super-types))))
 
+(define (sub-type type)
+    (let ((sub-types (take-while (lambda (t) (not (eq? t type))) type-hierarchy)))
+        (if (null? sub-types)
+            #f
+            (last sub-types))))
+
 ; is x sub-type of y?
 (define (sub-type? x y)
     (let ((super-types 
@@ -47,21 +53,46 @@
 (define (get-raise from)
     (get 'raise (list from (super-type from))))
 
+(define (put-project from-type project table)
+    (let ((to-type (sub-type from-type)))
+        (if to-type
+            (put 'project (list from-type to-type) project table)
+            table)))
+
+(define (get-project from-type)
+    (let ((to-type (sub-type from-type)))
+        (if to-type
+            (get 'project (list from-type to-type))
+            #f)))
+
 (define (attach-tag tag x)
     (if (number? x)
         x
         (list tag x)))
 
 (define (type-tag x)
-    (if (number? x)
-        'scheme-number
-        (car x)))
+    (cond ((number? x) 'scheme-number)
+          ((pair? x) (car x))
+          (else #f)))
 
 (define (contents x)
-    (if (number? x)
-        x
-        (cadr x)))
+    (cond ((number? x) x)
+          ((pair? x) (cadr x))
+          (else #f)))
 
+(define (drop-num x)
+    (let ((type (type-tag x)))
+        (if type
+            (let ((project (get-project type)))
+                (if project
+                    (let ((y (project (contents x))))
+                        (let ((raise (get-raise (type-tag y))))
+                            (if (equ? (raise (contents y)) x)
+                                (drop-num y)
+                                x)))
+                    x))
+            x)))
+    
 (define (apply-generic op . args)
     (define (coerce to-type)
         (lambda (arg)
@@ -86,14 +117,14 @@
 
     (let ((proc (get-proc args)))
         (if proc
-            (apply proc (map contents args)) 
+            (drop-num (apply proc (map contents args)))
             (let ((proc2 (fold-left 
                             (lambda (res type)
                                 (or res (coerced-proc type))) 
                             #f 
                             (map type-tag args))))
                 (if proc2
-                    (proc2)
+                    (drop-num (proc2))
                     (error
                         "No method for theses types"
                         (list op (map type-tag args))))))))
@@ -176,7 +207,10 @@
                                                             (make-complex-from-real-imag 
                                                                 (/ (numer x) (denom x)) 
                                                                 0)) 
-                                                          table)))))))))
+                                                          (put-project 'rational
+                                                                       (lambda (x)
+                                                                           (make-scheme-number (numer x)))
+                                                                       table))))))))))
 
 (define (install-rectangular-package table)
     (define (make-from-real-imag x y)
@@ -281,7 +315,10 @@
                                     (install-polar-package 
                                         (put 'add '(complex complex)
                                              (lambda (x y) (tag (add-complex x y)))
-                                             table))))))))))
+                                             (put-project 'complex
+                                                          (lambda (z)
+                                                            (make-rational (real-part z) 1))
+                                                          table)))))))))))
 
 (define (make-scheme-number n)
   ((get 'make 'scheme-number) n))
