@@ -5,6 +5,11 @@
 (define (equ? x y) (apply-generic 'equ? x y))
 (define (zero? x) (apply-generic 'zero? x))
 (define (exp x y) (apply-generic 'exp x y))
+(define (square x) (mul x x))
+(define (square-root x) (apply-generic 'sqrt x))
+(define (arctan x y) (apply-generic 'arctan x y))
+(define (sine x) (apply-generic 'sine x))
+(define (cosine x) (apply-generic 'cosine x))
 
 (define (put op types item table)
     (cons (list op types item) table))
@@ -18,7 +23,7 @@
             (caddr res)
             res)))
 
-(define type-hierarchy '(scheme-number rational complex))
+(define type-hierarchy '(integer rational real complex))
 
 (define (super-type type)
     (let ((super-types 
@@ -71,7 +76,10 @@
         (list tag x)))
 
 (define (type-tag x)
-    (cond ((number? x) 'scheme-number)
+    (cond ((number? x)
+            (if (integer? x)
+                'integer
+                'real))
           ((pair? x) (car x))
           (else #f)))
 
@@ -130,27 +138,42 @@
                         (list op (map type-tag args))))))))
 
 (define (install-scheme-number-package table)
-  (define (tag x)
-    (attach-tag 'scheme-number x))
-  (put 'add '(scheme-number scheme-number)
-       (lambda (x y) (tag (+ x y)))
-       (put 'sub '(scheme-number scheme-number)
-            (lambda (x y) (tag (- x y)))
-            (put 'mul '(scheme-number scheme-number)
-                 (lambda (x y) (tag (* x y)))
-                 (put 'div '(scheme-number scheme-number)
-                      (lambda (x y) (tag (/ x y)))
-                      (put 'make 'scheme-number
-                           (lambda (x) (tag x))
-                           (put 'equ? '(scheme-number scheme-number)
-                                =
-                                (put 'zero? '(scheme-number)
-                                     (lambda (x) (= x 0))
-                                     (put 'exp '(scheme-number scheme-number)
-                                          (lambda (x y) (tag (expt x y))) 
-                                          (put-raise 'scheme-number
-                                                     (lambda (x) (make-rational x 1)) 
-                                                     table))))))))))
+
+    (define (install type-tag table)
+        (define (tag x)
+            (attach-tag type-tag x))
+
+        (put 'add (list type-tag type-tag)
+             (lambda (x y) (tag (+ x y)))
+             (put 'sub (list type-tag type-tag)
+                  (lambda (x y) (tag (- x y)))
+                  (put 'mul (list type-tag type-tag)
+                       (lambda (x y) (tag (* x y)))
+                       (put 'div (list type-tag type-tag)
+                            (lambda (x y) (tag (/ x y)))
+                            (put 'make type-tag
+                                 (lambda (x) (tag x))
+                                 (put 'equ? (list type-tag type-tag)
+                                      =
+                                      (put 'zero? (list type-tag)
+                                           (lambda (x) (= x 0))
+                                           (put 'exp (list type-tag type-tag)
+                                                (lambda (x y) (tag (expt x y)))
+                                                (put 'sqrt (list type-tag)
+                                                     sqrt
+                                                     (put 'arctan (list type-tag type-tag)
+                                                          atan
+                                                          (put 'cosine (list type-tag)
+                                                               cos
+                                                               table))))))))))))
+
+    (install 'integer 
+             (install 'real 
+                      (put-raise 'integer
+                                 (lambda (x) (make-rational x 1))
+                                 (put-raise 'real
+                                            (lambda (x) (make-complex-from-real-imag x 0))
+                                            table)))))
 
 (define (install-rational-package table)
     (define numer car)
@@ -184,6 +207,22 @@
     (define (zero? x)
         (= 0 (numer x)))
 
+    (define (square-root x)
+        (make-rat (sqrt (numer x))
+                  (sqrt (denom x))))
+
+    (define (arctan x y)
+        (let ((common-denom (* (denom x)
+                               (denom y))))
+            (atan (* (numer x) (/ common-denom (denom x)))
+                  (* (numer y) (/ common-denom (denom y))))))
+
+    (define (cosine x)
+        (cos (/ (numer x) (denom x))))
+
+    (define (sine x)
+        (sin (/ (numer x) (denom x))))
+
     (define (put-binary op proc table)
         (put op '(rational rational)
              (lambda (x y) (tag (proc x y)))
@@ -203,14 +242,18 @@
                                                 (put 'zero? '(rational)
                                                      zero?
                                                      (put-raise 'rational
-                                                          (lambda (x) 
-                                                            (make-complex-from-real-imag 
-                                                                (/ (numer x) (denom x)) 
-                                                                0)) 
+                                                          (lambda (x) (/ (numer x) (denom x))) 
                                                           (put-project 'rational
-                                                                       (lambda (x)
-                                                                           (make-scheme-number (numer x)))
-                                                                       table))))))))))
+                                                                       numer
+                                                                       (put 'sqrt '(rational)
+                                                                            square-root
+                                                                            (put-binary 'arctan
+                                                                                        arctan
+                                                                                        (put 'cosine '(rational)
+                                                                                             cosine
+                                                                                             (put 'sine '(rational)
+                                                                                                  sine
+                                                                                                  table))))))))))))))
 
 (define (install-rectangular-package table)
     (define (make-from-real-imag x y)
@@ -218,12 +261,12 @@
     (define real-part car)
     (define imag-part cdr)
     (define (magnitude z)
-        (sqrt (+ (square (real-part z))
-                 (square (imag-part z)))))
+        (square-root (add (square (real-part z))
+                          (square (imag-part z)))))
     (define (angle z)
-        (atan (real-part z) (imag-part z)))
+        (arctan (real-part z) (imag-part z)))
     (define (make-from-mag-ang r a)
-        (cons (* r (cos a)) (* r (sin a))))
+        (cons (mul r (cos a)) (mul r (sin a))))
 
     (define (tag z)
         (attach-tag 'rectangular z))
@@ -243,12 +286,12 @@
     (define angle cdr)
     (define (make-from-mag-ang r a) (cons r a))
     (define (real-part z)
-        (* (magnitude z) (cos (angle z))))
+        (mul (magnitude z) (cosine (angle z))))
     (define (imag-part z)
-        (* (magnitude z) (sin (angle z))))
+        (mul (magnitude z) (sine (angle z))))
     (define (make-from-real-imag x y)
-        (cons (sqrt (+ (square x) (square y)))
-              (atan x y)))
+        (cons (square-root (add (square x) (square y)))
+              (arctan x y)))
     
     (define (tag z)
         (attach-tag 'polar z))
@@ -318,10 +361,12 @@
                                              (put-project 'complex
                                                           (lambda (z)
                                                             (make-rational (real-part z) 1))
-                                                          table)))))))))))
+                                                          (put 'real-part '(complex)
+                                                               real-part
+                                                               (put 'imag-part '(complex)
+                                                                    imag-part
+                                                                    table)))))))))))))
 
-(define (make-scheme-number n)
-  ((get 'make 'scheme-number) n))
 (define (make-rational n d)
   ((get 'make 'rational) n d))
 (define (make-complex-from-real-imag x y)
@@ -329,6 +374,10 @@
 (define (make-complex-from-mag-ang r a)
   ((get 'make-from-mag-ang 'complex) r a))
 
+(define (real-part z)
+    (apply-generic 'real-part z))
+(define (imag-part z)
+    (apply-generic 'imag-part z))
 (define (magnitude z)
     (apply-generic 'magnitude z))
 (define (angle z)
