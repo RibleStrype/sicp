@@ -10,6 +10,7 @@
 (define (arctan x y) (apply-generic 'arctan x y))
 (define (sine x) (apply-generic 'sine x))
 (define (cosine x) (apply-generic 'cosine x))
+(define (negate x) (apply-generic 'negate x))
 
 (define (put op types item table)
     (cons (list op types item) table))
@@ -372,10 +373,89 @@
     (and (variable? x)
          (variable? y)
          (eq? x y)))
+(define (make-term order coeff)
+        (list order coeff))
+(define order car)
+(define coeff cadr)
+
+(define (install-sparse-package table)
+    (define (tag terms) (attach-tag 'sparse terms))
+
+    (define empty-termlist? null?) 
+    (define first-term car)
+    (define rest-terms cdr)
+
+    (define (adjoin-term t L)
+        (cons t L))
+
+    (define the-empty-termlist (tag ()))
+
+    (put 'make-term-list 'sparse
+         tag
+         (put 'empty-termlist? '(sparse)
+              empty-termlist?
+              (put 'first-term '(sparse)
+                   first-term
+                   (put 'rest-terms '(sparse)
+                        (lambda (L) (tag (rest-terms L))) 
+                        (put 'adjoin-term '(sparse sparse)
+                             (lambda (t L) (tag (adjoin-term t L)))
+                             (put 'the-empty-termlist '(sparse)
+                                  (lambda (L) the-empty-termlist)
+                                  table)))))))
+
+(define (install-dense-package table)
+    (define (tag terms)
+        (attach-tag 'dense terms))
+        
+    (define (empty-termlist? L) (null? L))
+
+    (define (first-term L)
+        (make-term (length (cdr L))
+                   (car L)))
+
+    (define (rest-terms L)
+        (drop-while zero? (cdr L)))
+
+    (define (pad n L)
+        (if (zero? n)
+            L
+            (cons 0 
+                  (pad (- n 1) L))))
+
+    (define (adjoin-term t L)
+        (cons (coeff t)
+              (pad (sub (order t) (length L)) 
+                   L)))
+
+    (define the-empty-termlist (tag ()))
+
+    (put 'make-term-list 'dense
+         tag
+         (put 'empty-termlist? '(dense)
+              empty-termlist?
+              (put 'first-term '(dense)
+                   first-term
+                   (put 'rest-terms '(dense)
+                        (lambda (L) (tag (rest-terms L)))
+                        (put 'adjoin-term '(dense dense)
+                             (lambda (t L) (tag (adjoin-term t L)))
+                             (put 'the-empty-termlist '(dense)
+                                  (lambda (L) the-empty-termlist)
+                                  table)))))))
 
 (define (install-polynomial-package table)
+    (define (make-sparse variable term-list)
+        (make-poly variable
+                   ((get 'make-term-list 'sparse) term-list)))
+
+    (define (make-dense variable term-list)
+        (make-poly variable
+                   ((get 'make-term-list 'dense) term-list)))
+
     (define (make-poly variable term-list)
         (cons variable term-list))
+
     (define (variable p) (car p))
     (define (term-list p) (cdr p))
 
@@ -399,6 +479,14 @@
             (error "Polys not in same var: MUL-POLY"
                    (list p1 p2))))
 
+    (define (sub-poly p1 p2)
+        (add-poly p1 (negate-poly p2)))
+
+    (define (negate-poly p)
+        (mul-poly p
+                  (make-poly (variable p)
+                             (adjoin-term (make-term 0 -1) (the-empty-termlist p)))))
+
     (define (add-terms L1 L2)
         (cond ((empty-termlist? L1) L2)
               ((empty-termlist? L2) L1)
@@ -415,7 +503,8 @@
                                 t2
                                 (add-terms L1
                                            (rest-terms L2))))
-                          (else (adjoin-term
+                          (else 
+                                (adjoin-term
                                     (make-term (order t1)
                                                (add (coeff t1)
                                                     (coeff t2)))
@@ -446,17 +535,20 @@
 
     (define (tag p) (attach-tag 'polynomial p))
 
-    (define (make-term order coeff)
-        (list order coeff))
-    (define order car)
-    (define coeff cadr)
-    (define empty-termlist? null?)
-    (define first-term car)
-    (define rest-terms cdr)
+    (define (the-empty-termlist p)
+        (apply-generic 'the-empty-termlist (term-list p)))
+    (define (empty-termlist? L) 
+        (apply-generic 'empty-termlist? L))
+    (define (first-term L)
+        (apply-generic 'first-term L))
+    (define (rest-terms L)
+        (apply-generic 'rest-terms L))
     (define (adjoin-term t L)
         (if (zero? (coeff t))
             L
-            (cons t L)))
+            (apply-generic 'adjoin-term
+                           (attach-tag (type-tag L) t)
+                           L)))
 
     (put 'add '(polynomial polynomial)
          (lambda (p1 p2)
@@ -464,12 +556,19 @@
          (put 'mul '(polynomial polynomial)
               (lambda (p1 p2)
                 (tag (mul-poly p1 p2)))
-              (put 'make 'polynomial
-                   (lambda (var terms)
-                     (tag (make-poly var terms)))
+              (put 'make-sparse 'polynomial
+                   (lambda (variable terms) (tag (make-sparse variable terms)))
                    (put 'zero? '(polynomial)
-                        empty-termlist?
-                        table)))))
+                        (lambda (p) (empty-termlist? (term-list p)))
+                        (put 'sub '(polynomial polynomial)
+                             (lambda (p1 p2)
+                                (tag (sub-poly p1 p2)))
+                             (put 'negate '(polynomial)
+                                (lambda (p) (tag (negate-poly p)))
+                                (put 'make-dense 'polynomial
+                                     (lambda (variable terms) (tag (make-dense variable terms)))
+                                     (install-sparse-package
+                                        (install-dense-package table))))))))))
 
 (define (make-rational n d)
   ((get 'make 'rational) n d))
@@ -477,8 +576,10 @@
   ((get 'make-from-real-imag 'complex) x y))
 (define (make-complex-from-mag-ang r a)
   ((get 'make-from-mag-ang 'complex) r a))
-(define (make-polynomial var terms)
-    ((get 'make 'polynomial) var terms))
+(define (make-polynomial-sparse var terms)
+    ((get 'make-sparse 'polynomial) var terms))
+(define (make-polynomial-dense var terms)
+    ((get 'make-dense 'polynomial) var terms))
 
 (define (real-part z)
     (apply-generic 'real-part z))
@@ -494,3 +595,6 @@
             (install-rational-package 
                 (install-complex-package 
                     (install-polynomial-package ())))))
+
+(define x (make-polynomial-sparse 'x (list (list 2 1) (list 1 5) (list 0 7))))
+(define y (make-polynomial-dense 'x (list 1 5 7)))
