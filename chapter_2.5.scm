@@ -483,9 +483,24 @@
         (add-poly p1 (negate-poly p2)))
 
     (define (negate-poly p)
-        (mul-poly p
-                  (make-poly (variable p)
-                             (adjoin-term (make-term 0 -1) (the-empty-termlist p)))))
+        (make-poly (variable p)
+                   (negate-terms (term-list p))))
+
+    (define (negate-terms L)
+        (mul-term-by-all-terms (make-term 0 -1)
+                               L))
+
+    (define (div-poly p1 p2)
+        (if (same-variable? (variable p1)
+                            (variable p2))
+            (let ((res (div-terms (term-list p1)
+                                  (term-list p2))))
+                (list (make-poly (variable p1)
+                                 (car res))
+                      (make-poly (variable p1)
+                                 (cadr res))))
+            (error "Polys not in same var: DIV-POLY"
+                   (list p1 p2))))
 
     (define (add-terms L1 L2)
         (cond ((empty-termlist? L1) L2)
@@ -511,6 +526,10 @@
                                     (add-terms (rest-terms L1)
                                                (rest-terms L2)))))))))
 
+    (define (sub-terms L1 L2)
+        (add-terms L1
+                   (negate-terms L2)))
+
     (define (mul-terms L1 L2)
         (if (empty-termlist? L1)
             L1
@@ -533,10 +552,30 @@
                 (mul-term t (first-term L))
                 (mul-term-by-all-terms t (rest-terms L)))))
 
+    (define (div-terms L1 L2)
+        (if (empty-termlist? L1)
+            (list (the-empty-termlist L1)
+                  (the-empty-termlist L1))
+            (let ((t1 (first-term L1))
+                  (t2 (first-term L2)))
+                (if (> (order t2) (order t1))
+                    (list (the-empty-termlist L1) L1)
+                    (let ((new-c (div (coeff t1)
+                                      (coeff t2)))
+                          (new-o (- (order t1)
+                                    (order t2))))
+                        (let* ((new-t (make-term new-o new-c))
+                               (rest-of-result
+                                  (div-terms (sub-terms L1
+                                                        (mul-term-by-all-terms new-t L2))
+                                             L2)))
+                            (list (adjoin-term new-t (car rest-of-result))
+                                  (cadr rest-of-result))))))))
+
     (define (tag p) (attach-tag 'polynomial p))
 
-    (define (the-empty-termlist p)
-        (apply-generic 'the-empty-termlist (term-list p)))
+    (define (the-empty-termlist L)
+        (apply-generic 'the-empty-termlist L))
     (define (empty-termlist? L) 
         (apply-generic 'empty-termlist? L))
     (define (first-term L)
@@ -567,8 +606,13 @@
                                 (lambda (p) (tag (negate-poly p)))
                                 (put 'make-dense 'polynomial
                                      (lambda (variable terms) (tag (make-dense variable terms)))
-                                     (install-sparse-package
-                                        (install-dense-package table))))))))))
+                                     (put 'div '(polynomial polynomial)
+                                          (lambda (p1 p2)
+                                            (let ((res (div-poly p1 p2)))
+                                                (list (tag (car res))
+                                                      (tag (cadr res)))))
+                                          (install-sparse-package
+                                            (install-dense-package table)))))))))))
 
 (define (make-rational n d)
   ((get 'make 'rational) n d))
@@ -596,5 +640,5 @@
                 (install-complex-package 
                     (install-polynomial-package ())))))
 
-(define x (make-polynomial-sparse 'x (list (list 2 1) (list 1 5) (list 0 7))))
-(define y (make-polynomial-dense 'x (list 1 5 7)))
+(define x (make-polynomial-sparse 'x (list (list 5 1) (list 0 -1))))
+(define y (make-polynomial-dense 'x (list 1 0 -1)))
