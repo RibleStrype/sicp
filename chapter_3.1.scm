@@ -1,4 +1,4 @@
-(define (make-account balance)
+(define (make-account balance password)
     (define (withdraw amount)
         (if (>= balance amount)
             (begin (set! balance (- balance amount))
@@ -10,12 +10,20 @@
             (set! balance (+ balance amount))
             balance))
 
+    (define (incorrect-password _)
+        "Incorrect password")
+
     (define (dispatch m)
         (cond ((eq? 'withdraw m) withdraw)
               ((eq? 'deposit m) deposit)
               (else (error "Unknown request: MAKE-ACCOUNT" m))))
     
-    dispatch)
+    (define (dispatch-login pwd m)
+        (if (eq? pwd password)
+            (dispatch m)
+            "Incorrect password"))
+
+    dispatch-login)
 
 (define (make-accumulator sum)
     (lambda (n)
