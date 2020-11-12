@@ -41,3 +41,38 @@
                   ((eq? 'reset-count x) (set! count 0))
                   (else (begin (set! count (+ count 1))
                                (f x)))))))
+
+(define (monte-carlo trials experiment)
+
+    (define (iter remaining passed)
+        (cond ((= remaining 0) (/ passed trials))
+              ((experiment) (iter (- remaining 1)
+                                  (+ passed 1)))
+              (else (iter (- remaining 1)
+                          passed))))
+
+    (iter trials 0))
+
+(define (estimate-integral p x1 x2 y1 y2 trials)
+
+    (define (random-in-range low high)
+        (let ((range (- high low)))
+            (+ low (random range))))
+
+    (define (experiment)
+        (let ((x (random-in-range (min x1 x2) 
+                                  (max x1 x2)))
+              (y (random-in-range (min y1 y2) 
+                                  (max y1 y2))))
+            (p x y)))
+
+    (monte-carlo trials experiment))
+
+(define (estimate-pi trials)
+    (* 4.0
+       (estimate-integral
+           (lambda (x y)
+            (< (+ (square x) (square y)) 
+               1))
+           -1.0 1.0 -1.0 1.0
+           trials)))
