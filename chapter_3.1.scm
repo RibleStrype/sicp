@@ -1,29 +1,33 @@
 (define (make-account balance password)
-    (define (withdraw amount)
-        (if (>= balance amount)
-            (begin (set! balance (- balance amount))
-                    balance)
-            "Insufficient funds"))
+    (let ((consequent-login-attempts 0))
+        (define (withdraw amount)
+            (if (>= balance amount)
+                (begin (set! balance (- balance amount))
+                        balance)
+                "Insufficient funds"))
 
-    (define (deposit amount)
-        (begin 
-            (set! balance (+ balance amount))
-            balance))
+        (define (deposit amount)
+            (begin 
+                (set! balance (+ balance amount))
+                balance))           
 
-    (define (incorrect-password _)
-        "Incorrect password")
+        (define (dispatch m)
+            (cond ((eq? 'withdraw m) withdraw)
+                  ((eq? 'deposit m) deposit)
+                  (else (error "Unknown request: MAKE-ACCOUNT" m))))
 
-    (define (dispatch m)
-        (cond ((eq? 'withdraw m) withdraw)
-              ((eq? 'deposit m) deposit)
-              (else (error "Unknown request: MAKE-ACCOUNT" m))))
-    
-    (define (dispatch-login pwd m)
-        (if (eq? pwd password)
-            (dispatch m)
-            "Incorrect password"))
+        (define (dispatch-login pwd m)
+            (if (eq? pwd password)
+                (begin (set! consequent-login-attempts 0)
+                       (dispatch m))
+                (begin (set! consequent-login-attempts 
+                             (+ consequent-login-attempts 1))
+                       (lambda (_)
+                           (if (> consequent-login-attempts 6)
+                               "I'm calling the police"
+                               "Incorrect password")))))
 
-    dispatch-login)
+        dispatch-login))
 
 (define (make-accumulator sum)
     (lambda (n)
