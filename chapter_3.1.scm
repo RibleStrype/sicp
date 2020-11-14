@@ -1,33 +1,50 @@
-(define (make-account balance password)
-    (let ((consequent-login-attempts 0))
-        (define (withdraw amount)
-            (if (>= balance amount)
-                (begin (set! balance (- balance amount))
-                        balance)
-                "Insufficient funds"))
+(define (make-unprotected-account balance)
+    (define (withdraw amount)
+        (if (>= balance amount)
+            (begin (set! balance (- balance amount))
+                   balance)
+            "Insufficient funds"))
 
-        (define (deposit amount)
-            (begin 
-                (set! balance (+ balance amount))
-                balance))           
+    (define (deposit amount)
+        (begin (set! balance (+ balance amount))
+               balance))           
 
-        (define (dispatch m)
-            (cond ((eq? 'withdraw m) withdraw)
-                  ((eq? 'deposit m) deposit)
-                  (else (error "Unknown request: MAKE-ACCOUNT" m))))
+    (define (dispatch m)
+        (cond ((eq? 'withdraw m) withdraw)
+              ((eq? 'deposit m) deposit)
+              (else (error "Unknown request: MAKE-ACCOUNT" m))))
 
-        (define (dispatch-login pwd m)
+    dispatch)
+
+(define (protect account password)
+    (let ((attempts 0))
+        (define (incorrect-password _)
+            (if (> attempts 6)
+                "I'm calling the cops"
+                "Incorrect password"))
+
+        (lambda (pwd m)
             (if (eq? pwd password)
-                (begin (set! consequent-login-attempts 0)
-                       (dispatch m))
-                (begin (set! consequent-login-attempts 
-                             (+ consequent-login-attempts 1))
-                       (lambda (_)
-                           (if (> consequent-login-attempts 6)
-                               "I'm calling the police"
-                               "Incorrect password")))))
+                (begin (set! attempts 0)
+                       (account m))
+                (begin (set! attempts (+ attempts 1))
+                       incorrect-password)))))
 
-        dispatch-login))
+(define (make-account balance password)
+    (protect (make-unprotected-account balance)
+             password))
+
+(define (make-joint account orig-pwd new-pwd)
+    (protect (lambda (m) (account orig-pwd m))
+             new-pwd))
+
+(define peter-acc 
+  (make-account 100 'open-sesame))
+
+(define paul-acc
+  (make-joint peter-acc 
+              'open-sesame 
+              'rosebud))
 
 (define (make-accumulator sum)
     (lambda (n)
