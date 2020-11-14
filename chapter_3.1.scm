@@ -93,3 +93,11 @@
                1))
            -1.0 1.0 -1.0 1.0
            trials)))
+
+(define f
+    (let ((returned #f))
+        (lambda (x)
+            (if returned
+                0
+                (begin (set! returned #t)
+                       x)))))
