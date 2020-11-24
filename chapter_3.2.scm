@@ -41,3 +41,13 @@
                        (iter (cdr p))
                        1)))))
         (iter x)))
+
+(define (contains-cycle? xs)
+    (let ((visited ()))
+        (define (iter xs)
+            (cond ((null? xs) #f)
+                  ((element-of? xs visited) #t)
+                  (else (begin
+                    (set! visited (cons xs visited))
+                    (iter (cdr xs))))))
+    (iter xs)))
