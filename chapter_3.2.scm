@@ -51,3 +51,49 @@
                     (set! visited (cons xs visited))
                     (iter (cdr xs))))))
     (iter xs)))
+
+
+(define (make-queue)
+    (let ((front-ptr ()) (rear-ptr ()))
+        (define (empty?)
+            (null? front-ptr))
+
+        (define (front)
+            (if (empty?)
+                (error "FRONT on empty queue")
+                (car front-ptr)))
+
+        (define (insert! item)
+            (let ((new-pair (cons item ())))
+                (begin
+                    (if (empty?)
+                        (set! front-ptr new-pair)
+                        (set-cdr! rear-ptr new-pair))
+                    (set! rear-ptr new-pair))))
+
+        (define (delete!)
+            (if (empty?)
+                (error "DELETE on empty queue")
+                (let ((head (car front-ptr)))
+                    (set! front-ptr (cdr front-ptr))
+                    head)))
+
+        (define (dispatch m . args)
+            (cond ((eq? m 'empty?) (empty?))
+                  ((eq? m 'front) (front))
+                  ((eq? m 'insert!) (apply insert! args))
+                  ((eq? m 'delete!) (delete!))
+                  (else (error "Unsupported queue message" m))))
+
+        dispatch))
+
+(define (empty-queue? q) (q 'empty?))
+(define (front-queue q) (q 'front))
+(define (insert-queue! q item) (q 'insert! item))
+(define (delete-queue! q) (q 'delete!))
+(define (print-queue! q)
+    (if (not (empty-queue? q))
+        (begin
+            (display (delete-queue! q))
+            (newline)
+            (print-queue! q))))
